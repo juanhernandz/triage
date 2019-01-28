@@ -5,6 +5,7 @@ import json
 import logging
 import random
 import tempfile
+import itertools
 
 import postgres_copy
 import sqlalchemy
@@ -202,3 +203,37 @@ def save_db_objects(db_engine, db_objects):
             )
         f.seek(0)
         postgres_copy.copy_from(f, type(db_objects[0]), db_engine, format="csv")
+
+
+def class_path_implements_parallelization(class_path):
+    """Return whether or not the given class_path implements parallelization
+
+    Simply checks whether the path looks like 'RandomForest' or 'ExtraTrees'.
+    The alternative, checking for the existing of 'n_jobs' as a parameter, does not work
+    because it flags LogisticRegression as being parallelizable, but this is only true for
+    multiclass problems.
+
+    Args:
+        class_path (string) a path to a classifier
+
+    Returns: (bool) whether or not the classifier returns parallelization
+    """
+    if 'RandomForest' in class_path or 'ExtraTrees' in class_path:
+        return True
+    return False
+
+
+def partition(pred, iterable):
+    """Split an iterable into two lists, one meeting the predicate and one not
+
+    Adapted from Python's itertools recipe book
+
+    Args:
+        pred (callable) a predicate to split the iterable on
+        iterable (iterable) Some iterable you want to split
+
+    Returns: tuple(list, list): first list contains entries that satisfy the predicate,
+        second list contains entries that don't
+    """
+    t1, t2 = itertools.tee(iterable)
+    return list(filter(pred, t2)), list(itertools.filterfalse(pred, t1))

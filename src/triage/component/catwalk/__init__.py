@@ -5,6 +5,10 @@ from .evaluation import ModelEvaluator
 from .individual_importance import IndividualImportanceCalculator
 from .model_grouping import ModelGrouper
 
+from .utils import (
+    partition,
+    class_path_implements_parallelization,
+)
 import logging
 
 
@@ -71,6 +75,30 @@ class ModelTrainTester(object):
                     }
                 )
         return train_test_tasks
+
+    def split_tasks_by_parallelizability(self, tasks):
+        """Split train-test tasks by parallelizability
+
+        Args:
+            tasks (list) of tasks created by self.generate_tasks()
+
+        Returns: tuple(list, list) First list contains tasks that should be run serially
+            because they handle parallelization internally.
+            Second list contains tasks that should be run in parallel
+        """
+        serial, parallel = partition(
+            lambda task: class_path_implements_parallelization(task['train_kwargs']['class_path']),
+            tasks
+        )
+
+        logging.info("Split %s total modeling tasks into"
+                     "%s to run in parallel (smaller classifiers)",
+                     "and %s to run serially (larger classifiers)",
+                     len(tasks),
+                     len(serial),
+                     len(parallel)
+                     )
+        return serial, parallel
 
     def process_all_tasks(self, tasks):
         for task in tasks:

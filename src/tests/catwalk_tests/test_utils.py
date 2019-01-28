@@ -6,6 +6,8 @@ from triage.component.catwalk.utils import (
     missing_model_hashes,
     missing_matrix_uuids,
     sort_predictions_and_labels,
+    partition,
+    class_path_implements_parallelization
 )
 from triage.component.results_schema.schema import Matrix, Model
 from triage.component.catwalk.db import ensure_db
@@ -125,3 +127,16 @@ def test_sort_predictions_and_labels():
     )
     assert sorted_predictions == (0.6, 0.5, 0.5, 0.4)
     assert sorted_labels == (True, False, True, False)
+
+
+def test_partition():
+    iterable = [1, 2, 3, 4, 5, 6]
+    assert partition(lambda x: x == 3, iterable) == (
+        [3],
+        [1, 2, 4, 5, 6]
+    )
+
+
+def test_class_path_implements_parallelization():
+    assert class_path_implements_parallelization('sklearn.ensemble.RandomForestClassifier')
+    assert not class_path_implements_parallelization('sklearn.linear.LogisticRegression')

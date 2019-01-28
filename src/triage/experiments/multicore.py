@@ -56,9 +56,22 @@ class MultiCoreExperiment(ExperimentBase):
             run_task_with_splatted_arguments, self.model_train_tester.process_task
         )
 
-        logging.info("Starting parallel testing with %s processes", self.n_processes)
-        parallelize(partial_test, tasks, self.n_processes)
+        serial_tasks, parallel_tasks = self.model_train_tester.split_tasks_by_parallelizability(tasks)
+        # some tasks we want to run serially because they implement parallelization themselves
+        # others we want to parallelize via multiprocessing
+        logging.info("Starting parallel train/testing with %s processes", self.n_processes)
+        parallelize(partial_test, parallel_tasks, self.n_processes)
         logging.info("Cleaned up concurrent pool")
+
+        for serial_task in serial_tasks:
+            final_task = serial_task
+            # if n_jobs is not set we want to use the whole machine with -1
+            # however if they set n_jobs we want to respect that
+            if "n_jobs" not in serial_task["train_kwargs"]["parameters"]:
+                logging.info("n_jobs not configured for serial task, "
+                             "defaulting to -1 for entire machine")
+                final_task["train_kwargs"]["parameters"]["n_jobs"] = -1
+            self.model_train_tester.process_task(**final_task)
 
     def process_query_tasks(self, query_tasks):
         logging.info("Processing query tasks with %s processes", self.n_db_processes)
