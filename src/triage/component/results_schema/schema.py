@@ -29,6 +29,7 @@ schemas = (
     "CREATE SCHEMA IF NOT EXISTS model_metadata;"
     " CREATE SCHEMA IF NOT EXISTS test_results;"
     " CREATE SCHEMA IF NOT EXISTS train_results;"
+    " CREATE SCHEMA IF NOT EXISTS production;"
 )
 
 event.listen(Base.metadata, "before_create", DDL(schemas))
@@ -66,7 +67,7 @@ class ModelGroup(Base):
 class ListPrediction(Base):
 
     __tablename__ = "list_predictions"
-    __table_args__ = {"schema": "model_metadata"}
+    __table_args__ = {"schema": "production"}
 
     model_id = Column(
         Integer, ForeignKey("model_metadata.models.model_id"), primary_key=True
