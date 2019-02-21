@@ -26,6 +26,7 @@ class BuilderBase(object):
         self.experiment_hash = experiment_hash
         self.replace = replace
         self.include_missing_labels_in_train_as = include_missing_labels_in_train_as
+        self.includes_labels = 'labels_table_name' in self.db_config
 
     @property
     def sessionmaker(self):
@@ -131,7 +132,7 @@ class BuilderBase(object):
         """
 
         as_of_time_strings = [str(as_of_time) for as_of_time in as_of_times]
-        if matrix_type == "test" or self.include_missing_labels_in_train_as is not None:
+        if matrix_type == "test" or matrix_type == "production" or self.include_missing_labels_in_train_as is not None:
             indices_query = self._all_valid_entity_dates_query(
                 as_of_time_strings=as_of_time_strings, state=state
             )
@@ -248,15 +249,17 @@ class MatrixBuilder(BuilderBase):
         ):
             logging.warning("cohort table is not populated, cannot build matrix")
             return
-        if not table_has_data(
-            "{}.{}".format(
-                self.db_config["labels_schema_name"],
-                self.db_config["labels_table_name"],
-            ),
-            self.db_engine,
-        ):
-            logging.warning("labels table is not populated, cannot build matrix")
-            return
+
+        if self.includes_labels:
+            if not table_has_data(
+                "{}.{}".format(
+                    self.db_config["labels_schema_name"],
+                    self.db_config["labels_table_name"],
+                ),
+                self.db_engine,
+            ):
+                logging.warning("labels table is not populated, cannot build matrix")
+                return
 
         matrix_store = self.matrix_storage_engine.get_store(matrix_uuid)
         if not self.replace and matrix_store.exists:
@@ -278,7 +281,7 @@ class MatrixBuilder(BuilderBase):
                 matrix_metadata["state"],
                 matrix_type,
                 matrix_uuid,
-                matrix_metadata["label_timespan"],
+                matrix_metadata.get("label_timespan", None),
             )
         except ValueError as e:
             logging.warning(
@@ -294,20 +297,21 @@ class MatrixBuilder(BuilderBase):
             as_of_times, feature_dictionary, entity_date_table_name, matrix_uuid
         )
         logging.info(f"Feature data extracted for matrix {matrix_uuid}")
-        logging.info(
-            "Extracting label data from database into file for " "matrix %s",
-            matrix_uuid,
-        )
-        labels_df = self.load_labels_data(
-            label_name,
-            label_type,
-            entity_date_table_name,
-            matrix_uuid,
-            matrix_metadata["label_timespan"],
-        )
-        dataframes.insert(0, labels_df)
 
-        logging.info(f"Label data extracted for matrix {matrix_uuid}")
+        if self.includes_labels:
+            logging.info(
+                "Extracting label data from database into file for " "matrix %s",
+                matrix_uuid,
+            )
+            labels_df = self.load_labels_data(
+                label_name,
+                label_type,
+                entity_date_table_name,
+                matrix_uuid,
+                matrix_metadata["label_timespan"],
+            )
+            dataframes.insert(0, labels_df)
+            logging.info(f"Label data extracted for matrix {matrix_uuid}")
         # stitch together the csvs
         logging.info("Merging feature files for matrix %s", matrix_uuid)
         output = self.merge_feature_csvs(dataframes, matrix_uuid)
@@ -315,7 +319,10 @@ class MatrixBuilder(BuilderBase):
 
         matrix_store.metadata = matrix_metadata
         # store the matrix
-        labels = output.pop(matrix_store.label_column_name)
+        if self.includes_labels:
+            labels = output.pop(matrix_store.label_column_name)
+        else:
+            labels = None
         matrix_store.matrix_label_tuple = output, labels
         matrix_store.save()
         logging.info("Matrix {matrix_uuid} saved")
