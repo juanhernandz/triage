@@ -368,10 +368,7 @@ class MatrixStore(object):
         if matrix_with_labels.index.names != indices:
             matrix_with_labels.set_index(indices, inplace=True)
         matrix_with_labels = downcast_matrix(matrix_with_labels)
-        if self.metadata['matrix_type'] != 'production':
-            labels = matrix_with_labels.pop(self.label_column_name)
-        else:
-            labels = None
+        labels = matrix_with_labels.pop(self.label_column_name)
         design_matrix = matrix_with_labels
         return design_matrix, labels
 
